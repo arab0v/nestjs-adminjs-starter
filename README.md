@@ -1,98 +1,127 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+I'm writing this blog because AdminJS decided to go with ESM in their latest version (v7) and make my life harder (a bit) because NestJS are still using CommonJS and theres [no plan to support esm]('https://github.com/nestjs/nest/issues/13319').
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+### Simply my problem was:
+Use `require('adminjs')` and you get a `ERR_REQUIRE_ESM`
+Use normal import in TypeScript, wait for CJS to compile, again you get a `ERR_REQUIRE_ESM`
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+### But hold up isn't there official example?
+There's this repo people point to: [dziraf/adminjs-v7-with-nestjs]('https://github.com/dziraf/adminjs-v7-with-nestjs'). It claims to show AdminJS v7 running smoothly with NestJS, and the AdminJS docs even link to it as an example.
+Cool, right?
+Except... have you actually tried cloning and running it?
+It doesn't work. There's a known open issue that's been sitting there for years: Not running · [Issue #1]('https://github.com/dziraf/adminjs-v7-with-nestjs/issues/1').
 
-## Description
+### The trick in one sentence
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Load AdminJS and friends with **dynamic `import()`** inside async function and keep everything else CommonJS like it always was.
 
-## Project setup
 
+### Time to code
+
+make sure to rollback all the changes form adminjs documentation first then lets start.
+
+**Package Installation**
+
+create new nest project in current dir if you didn't already 
 ```bash
-$ npm install
+nest new .
 ```
 
-## Compile and run the project
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+install all the boys. sequelize in my case and could be whatever you want just install orm's adapter from [adminjs docs]('https://docs.adminjs.co/installation/adapters').
+```bash 
+npm install sequelize adminjs @adminjs/nestjs @adminjs/sequelize  @adminjs/express express-session express-formidable
 ```
 
-## Run tests
-
+create adminjs esm loader
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+touch src/adminjs-loader.ts
 ```
 
-## Deployment
+**src/adminjs-loader.ts**
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```ts
+// This file is the only place where we touch ESM stuff
+export async function loadAdminJS() {
+  const [adminjs, adminjsNest, sequelizeAdapter] = await Promise.all([
+    import('adminjs'),
+    import('@adminjs/nestjs'),
+    import('@adminjs/sequelize'),
+  ]);
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+  const AdminJS = adminjs.default;
+  const { AdminModule } = adminjsNest;
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+  // Tell AdminJS to use Sequelize u can use any other orm adapter
+  AdminJS.registerAdapter({
+    Database: sequelizeAdapter.Database,
+    Resource: sequelizeAdapter.Resource,
+  });
+
+  return { AdminJS, AdminModule };
+}
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+**src/main.ts** (almost unchanged)
 
-## Resources
+```ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
 
-Check out a few resources that may come in handy when working with NestJS:
+async function bootstrap() {
+  // We let AppModule do async setup (including AdminJS)
+  const rootModule = await AppModule.forRoot();
+  const app = await NestFactory.create(rootModule);
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+  await app.listen(process.env.PORT || 3000);
+}
 
-## Support
+bootstrap();
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+**src/app.module.ts** (the place where you actually use it)
 
-## Stay in touch
+```ts
+import { Module } from '@nestjs/common';
+import { loadAdminJS } from './adminjs-loader';
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+@Module({})
+export class AppModule {
+  static async forRoot() {
+    const { AdminModule } = await loadAdminJS();
 
-## License
+    return {
+      module: AppModule,
+      imports: [
+        AdminModule.createAdmin({
+          adminJsOptions: {
+            rootPath: '/admin',
+          },
+        }),
+      ],
+    };
+  }
+}
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### Why this actually works well enough
+
+- Dynamic `import()` is allowed in CommonJS files  
+- Nothing else in your project needs to become ESM  
+- No `"type": "module"` in package.json  
+- No tsconfig `"module": "nodenext"` nightmare  
+- No wrappers, no babel plugins, no weird loaders  
+- You only pay the async price once at startup
+
+### What usually goes wrong (heads up)
+
+- Don’t do `import AdminJS from 'adminjs'` at the top of files — TypeScript will compile it → runtime crash
+- Put all AdminJS-related imports **only** inside `loadAdminJS()`
+
+### Resources thats lead me to this solution
+- [DynamicModule]('https://docs.nestjs.com/fundamentals/dynamic-modules') chapter from nestjs
+- [Running esm packages in commonJS]('https://stackoverflow.com/questions/70396400/how-to-use-es6-modules-in-commonjs')
+
+### End
+This is not the most beautiful solution.
+But it’s small, contained, and lets you keep running AdminJS v7 today without rewriting half your monorepo or forcing ESM on the whole team.
+
+Good luck.
