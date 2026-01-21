@@ -1,14 +1,14 @@
-I'm writing this blog because AdminJS decided to go with ESM in their latest version (v7) and make my life harder (a bit) because NestJS are still using CommonJS and theres [no plan to support esm]('https://github.com/nestjs/nest/issues/13319').
+I'm writing this blog because AdminJS decided to go with ESM in their latest version (v7) and make my life harder (a bit) because NestJS are still using CommonJS and theres [no plan to support esm](https://github.com/nestjs/nest/issues/13319).
 
 ### Simply my problem was:
 Use `require('adminjs')` and you get a `ERR_REQUIRE_ESM`
 Use normal import in TypeScript, wait for CJS to compile, again you get a `ERR_REQUIRE_ESM`
 
 ### But hold up isn't there official example?
-There's this repo people point to: [dziraf/adminjs-v7-with-nestjs]('https://github.com/dziraf/adminjs-v7-with-nestjs'). It claims to show AdminJS v7 running smoothly with NestJS, and the AdminJS docs even link to it as an example.
+There's this repo people point to: [dziraf/adminjs-v7-with-nestjs](https://github.com/dziraf/adminjs-v7-with-nestjs). It claims to show AdminJS v7 running smoothly with NestJS, and the AdminJS docs even link to it as an example.
 Cool, right?
 Except... have you actually tried cloning and running it?
-It doesn't work. There's a known open issue that's been sitting there for years: Not running · [Issue #1]('https://github.com/dziraf/adminjs-v7-with-nestjs/issues/1').
+It doesn't work. There's a known open issue that's been sitting there for years: Not running · [Issue #1](https://github.com/dziraf/adminjs-v7-with-nestjs/issues/1).
 
 ### The trick in one sentence
 
@@ -26,7 +26,7 @@ create new nest project in current dir if you didn't already
 nest new .
 ```
 
-install all the boys. sequelize in my case and could be whatever you want just install orm's adapter from [adminjs docs]('https://docs.adminjs.co/installation/adapters').
+install all the boys. sequelize in my case and could be whatever you want just install orm's adapter from [adminjs docs](https://docs.adminjs.co/installation/adapters).
 ```bash 
 npm install sequelize adminjs @adminjs/nestjs @adminjs/sequelize  @adminjs/express express-session express-formidable
 ```
@@ -117,8 +117,8 @@ export class AppModule {
 - Put all AdminJS-related imports **only** inside `loadAdminJS()`
 
 ### Resources thats lead me to this solution
-- [DynamicModule]('https://docs.nestjs.com/fundamentals/dynamic-modules') chapter from nestjs
-- [Running esm packages in commonJS]('https://stackoverflow.com/questions/70396400/how-to-use-es6-modules-in-commonjs')
+- [DynamicModule](https://docs.nestjs.com/fundamentals/dynamic-modules) chapter from nestjs
+- [Running esm packages in commonJS](https://stackoverflow.com/questions/70396400/how-to-use-es6-modules-in-commonjs)
 
 ### End
 This is not the most beautiful solution.
