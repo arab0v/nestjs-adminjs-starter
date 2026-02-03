@@ -1,3 +1,9 @@
+# AdminJS v7 with NestJS (CommonJS)
+
+> **⚠️ Note:** This repository contains an improved version of the code compared to the [dev.to article](https://dev.to/arab0v/adminjs-v7-in-classic-nestjs-without-tears-23en). The article shows the basic approach, but the code here has been refactored for better organization (see the "Better project structure" section below).
+
+---
+
 I'm writing this blog because AdminJS decided to go with ESM in their latest version (v7) and make my life harder (a bit) because NestJS are still using CommonJS and theres [no plan to support esm](https://github.com/nestjs/nest/issues/13319).
 
 ### Simply my problem was:
@@ -21,22 +27,24 @@ make sure to rollback all the changes form adminjs documentation first then lets
 
 **Package Installation**
 
-create new nest project in current dir if you didn't already 
+create new nest project in current dir if you didn't already
 ```bash
 nest new .
 ```
 
 install all the boys. sequelize in my case and could be whatever you want just install orm's adapter from [adminjs docs](https://docs.adminjs.co/installation/adapters).
-```bash 
+```bash
 npm install sequelize adminjs @adminjs/nestjs @adminjs/sequelize  @adminjs/express express-session express-formidable
 ```
 
-create adminjs esm loader
+create admin module folder to isolate the ESM mess
 ```bash
-touch src/adminjs-loader.ts
+mkdir src/admin
+touch src/admin/adminjs-loader.ts
+touch src/admin/admin.module.ts
 ```
 
-**src/adminjs-loader.ts**
+**src/admin/adminjs-loader.ts**
 
 ```ts
 // This file is the only place where we touch ESM stuff
@@ -48,7 +56,7 @@ export async function loadAdminJS() {
   ]);
 
   const AdminJS = adminjs.default;
-  const { AdminModule } = adminjsNest;
+  const { AdminModule: AdminJSModule } = adminjsNest;
 
   // Tell AdminJS to use Sequelize u can use any other orm adapter
   AdminJS.registerAdapter({
@@ -56,42 +64,25 @@ export async function loadAdminJS() {
     Resource: sequelizeAdapter.Resource,
   });
 
-  return { AdminJS, AdminModule };
+  return { AdminJS, AdminJSModule };
 }
 ```
 
-**src/main.ts** (almost unchanged)
-
-```ts
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-
-async function bootstrap() {
-  // We let AppModule do async setup (including AdminJS)
-  const rootModule = await AppModule.forRoot();
-  const app = await NestFactory.create(rootModule);
-
-  await app.listen(process.env.PORT || 3000);
-}
-
-bootstrap();
-```
-
-**src/app.module.ts** (the place where you actually use it)
+**src/admin/admin.module.ts**
 
 ```ts
 import { Module } from '@nestjs/common';
 import { loadAdminJS } from './adminjs-loader';
 
 @Module({})
-export class AppModule {
-  static async forRoot() {
-    const { AdminModule } = await loadAdminJS();
+export class AdminModule {
+  static async forRootAsync() {
+    const { AdminJSModule } = await loadAdminJS();
 
     return {
-      module: AppModule,
+      module: AdminModule,
       imports: [
-        AdminModule.createAdmin({
+        AdminJSModule.createAdmin({
           adminJsOptions: {
             rootPath: '/admin',
           },
@@ -102,14 +93,50 @@ export class AppModule {
 }
 ```
 
+**src/main.ts** (back to normal NestJS)
+
+```ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  await app.listen(process.env.PORT ?? 3000);
+}
+
+bootstrap();
+```
+
+**src/app.module.ts** (clean and simple)
+
+```ts
+import { Module } from '@nestjs/common';
+import { AdminModule } from './admin/admin.module';
+
+@Module({
+  imports: [AdminModule.forRootAsync()],
+})
+export class AppModule {}
+```
+
 ### Why this actually works well enough
 
-- Dynamic `import()` is allowed in CommonJS files  
-- Nothing else in your project needs to become ESM  
-- No `"type": "module"` in package.json  
-- No tsconfig `"module": "nodenext"` nightmare  
-- No wrappers, no babel plugins, no weird loaders  
+- Dynamic `import()` is allowed in CommonJS files
+- Nothing else in your project needs to become ESM
+- No `"type": "module"` in package.json
+- No tsconfig `"module": "nodenext"` nightmare
+- No wrappers, no babel plugins, no weird loaders
 - You only pay the async price once at startup
+- **Isolated in a separate module** — All the ESM mess is contained in `src/admin/` folder, keeping your main app clean
+
+### Better project structure
+
+By moving AdminJS into its own module (`src/admin/`), you get:
+- **Separation of concerns** — AdminJS logic is isolated from your main app
+- **Cleaner imports** — Your `AppModule` just imports `AdminModule`, not individual files
+- **Standard NestJS patterns** — `main.ts` and `app.module.ts` look normal again
+- **Easier to maintain** — All AdminJS-related code lives in one place
 
 ### What usually goes wrong (heads up)
 
