@@ -6,7 +6,7 @@ export async function loadAdminJS() {
   ]);
 
   const AdminJS = adminjs.default;
-  const { AdminModule } = adminjsNest;
+  const { AdminModule: AdminJSModule } = adminjsNest;
 
   // Tell AdminJS to use Sequelize u can use any other orm adapter
   AdminJS.registerAdapter({
@@ -14,5 +14,5 @@ export async function loadAdminJS() {
     Resource: sequelizeAdapter.Resource,
   });
 
-  return { AdminJS, AdminModule };
+  return { AdminJS, AdminJSModule };
 }
